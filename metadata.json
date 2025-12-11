@@ -1,0 +1,5 @@
+{
+  "name": "TripSpot",
+  "description": "A high-contrast, tangent-style family travel planner. Parses chat logs into map locations, optimizes routes, and exports offline itineraries.",
+  "requestFramePermissions": []
+}

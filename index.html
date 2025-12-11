@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TripSpot | 旅点</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              background: '#FFFFFF',
+              foreground: '#000000',
+              muted: '#F3F4F6',
+            },
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+            },
+            boxShadow: {
+              'hard': '4px 4px 0 0 #000',
+              'hard-sm': '2px 2px 0 0 #000',
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      /* Custom map marker styles */
+      .custom-marker {
+        background-color: black;
+        color: white;
+        border: 1px solid white;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 12px;
+        box-shadow: 2px 2px 0 0 rgba(0,0,0,0.5);
+      }
+      .custom-marker.selected {
+        transform: scale(1.2);
+        box-shadow: 3px 3px 0 0 #000;
+        border: 2px solid white;
+      }
+      .custom-marker.inactive {
+        background-color: #ccc;
+        box-shadow: none;
+      }
+      .amap-logo, .amap-copyright {
+        display: none !important;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.1/",
+    "react": "https://aistudiocdn.com/react@^19.2.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.33.0"
+  }
+}
+</script>
+</head>
+  <body class="bg-background text-foreground antialiased selection:bg-black selection:text-white">
+    <div id="root"></div>
+  </body>
+</html>
