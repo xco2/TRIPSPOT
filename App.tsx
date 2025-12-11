@@ -4,13 +4,20 @@ import InputSection from './components/InputSection';
 import LocationList from './components/LocationList';
 import MapContainer from './components/MapContainer';
 import Button from './components/ui/Button';
+import Login from './components/Login';
+import Settings from './components/Settings';
 import { extractLocationsFromText } from './services/geminiService';
 import { geocodeLocations } from './services/mapService';
 import { solveTSP } from './services/tspService';
 import { generateOfflineHTML } from './utils/htmlGenerator';
-import { AMAP_KEY, AMAP_SECURITY_CODE } from './constants';
+import { getSettings, isUserLoggedIn } from './utils/storage';
+
+type ViewState = 'login' | 'main';
 
 function App() {
+  const [view, setView] = useState<ViewState>('login');
+  const [showSettings, setShowSettings] = useState(false);
+  
   const [locations, setLocations] = useState<LocationItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [route, setRoute] = useState<RouteResult | null>(null);
@@ -18,12 +25,28 @@ function App() {
   const [routingStatus, setRoutingStatus] = useState<RoutingStatus>('idle');
   const [mapLoaded, setMapLoaded] = useState(false);
 
-  // Global AMap Loading Logic
+  // Initialize Auth State
   useEffect(() => {
+    if (isUserLoggedIn()) {
+      setView('main');
+    }
+  }, []);
+
+  // Map Loading Logic - Depends on Settings
+  useEffect(() => {
+    if (view !== 'main') return;
+
+    const settings = getSettings();
+    if (!settings.amapKey) {
+      // If no key is configured, we can't load the map. 
+      // User needs to go to settings.
+      return;
+    }
+
     // Check if config exists, if not set it
     if (!window._AMapSecurityConfig) {
        window._AMapSecurityConfig = {
-        securityJsCode: AMAP_SECURITY_CODE,
+        securityJsCode: settings.amapSecurityCode,
       };
     }
     
@@ -35,8 +58,6 @@ function App() {
 
     // 2. Define Callback for Async Loading
     window.onAMapLoaded = () => {
-      // Small delay to ensure internal plugins are ready if needed, 
-      // though callback usually means core is ready.
       setTimeout(() => {
         setMapLoaded(true);
       }, 100);
@@ -47,8 +68,6 @@ function App() {
     const existingScript = document.getElementById(scriptId);
     
     if (existingScript) {
-      // If script exists but AMap not yet on window, poll for it
-      // This handles hot-reload scenarios where script is kept but state is reset
       const interval = setInterval(() => {
         if (window.AMap) {
           setMapLoaded(true);
@@ -58,24 +77,29 @@ function App() {
       return () => clearInterval(interval);
     }
 
-    // 4. Inject Script with Callback
+    // 4. Inject Script with Callback using Key from Settings
     const script = document.createElement('script');
     script.id = scriptId;
-    script.src = `https://webapi.amap.com/maps?v=2.0&key=${AMAP_KEY}&callback=onAMapLoaded`;
+    script.src = `https://webapi.amap.com/maps?v=2.0&key=${settings.amapKey}&callback=onAMapLoaded`;
     script.async = true;
     script.onerror = () => {
-      alert("高德地图加载失败，请检查 API Key");
+      alert("高德地图加载失败，请在设置中检查 API Key");
     };
     document.body.appendChild(script);
 
     return () => {
-      // Cleanup
       window.onAMapLoaded = undefined;
     };
-  }, []);
+  }, [view]); // Reload logic if view changes to main, relies on settings being saved triggers reload in Settings component
 
   const handleParse = async (text: string) => {
     if (!mapLoaded) {
+      const settings = getSettings();
+      if (!settings.amapKey) {
+         alert("请先点击右上角设置，配置高德地图 API Key");
+         setShowSettings(true);
+         return;
+      }
       alert("地图服务正在初始化，请稍等...");
       return;
     }
@@ -93,10 +117,10 @@ function App() {
       setSelectedIds(new Set(validLocations.map(l => l.id)));
       setRoute(null);
       setParsingStatus('success');
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
       setParsingStatus('error');
-      alert("提取失败，请检查网络或 API 配置。");
+      alert(`提取失败: ${error.message || "未知错误"}`);
     }
   };
 
@@ -113,7 +137,7 @@ function App() {
 
   const handleRoutePlanning = async () => {
     if (!mapLoaded) {
-       alert("地图服务未就绪");
+       alert("地图服务未就绪，请检查 API Key 配置");
        return;
     }
     if (selectedIds.size < 2) {
@@ -149,16 +173,34 @@ function App() {
     document.body.removeChild(a);
   };
 
+  if (view === 'login') {
+    return <Login onLoginSuccess={() => setView('main')} />;
+  }
+
   return (
     <div className="h-screen w-screen flex flex-col bg-background overflow-hidden">
+      {/* Settings Modal */}
+      {showSettings && (
+        <Settings 
+          onClose={() => setShowSettings(false)} 
+          onLogout={() => {
+            setShowSettings(false);
+            setView('login');
+          }}
+        />
+      )}
+
       {/* Header */}
       <header className="h-16 border-b border-black flex items-center justify-between px-6 bg-white shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 bg-black"></div>
           <h1 className="text-xl font-bold tracking-tighter">旅点 TRIPSPOT</h1>
         </div>
-        <div className="flex gap-4">
-           <div className="text-xs text-gray-400 font-mono">v1.5 家庭版</div>
+        <div className="flex items-center gap-4">
+           <div className="text-xs text-gray-400 font-mono hidden sm:block">v1.5 家庭版</div>
+           <Button variant="ghost" onClick={() => setShowSettings(true)} className="px-2">
+             ⚙️ 设置
+           </Button>
         </div>
       </header>
 
@@ -204,7 +246,7 @@ function App() {
                 onClick={handleRoutePlanning}
                 disabled={!mapLoaded || selectedIds.size < 2 || routingStatus === 'calculating'}
               >
-                {!mapLoaded ? '等待地图服务...' : routingStatus === 'calculating' ? '计算最优路线中...' : '⚡️ 智能规划路线'}
+                {!mapLoaded ? '等待地图 / 未配置 Key' : routingStatus === 'calculating' ? '计算最优路线中...' : '⚡️ 智能规划路线'}
               </Button>
               <Button 
                 variant="secondary"
@@ -222,9 +264,18 @@ function App() {
         <div className="flex-1 bg-gray-100 p-4">
           {!mapLoaded ? (
              <div className="w-full h-full flex flex-col items-center justify-center border border-black bg-white">
-               <div className="animate-spin w-8 h-8 border-4 border-black border-t-transparent rounded-full mb-4"></div>
-               <p className="font-bold">正在连接高德地图服务...</p>
-               <p className="text-xs text-gray-500 mt-2">首次加载可能需要几秒钟</p>
+               {!getSettings().amapKey ? (
+                 <>
+                  <p className="font-bold text-lg mb-2">欢迎使用旅点 TripSpot</p>
+                  <p className="text-gray-500 mb-4">请先点击右上角「设置」配置高德地图 API Key</p>
+                  <Button onClick={() => setShowSettings(true)}>去配置</Button>
+                 </>
+               ) : (
+                 <>
+                  <div className="animate-spin w-8 h-8 border-4 border-black border-t-transparent rounded-full mb-4"></div>
+                  <p className="font-bold">正在连接地图服务...</p>
+                 </>
+               )}
              </div>
           ) : (
             <MapContainer 

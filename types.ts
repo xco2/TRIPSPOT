@@ -17,6 +17,14 @@ export interface RouteResult {
 export type ParsingStatus = 'idle' | 'parsing' | 'geocoding' | 'success' | 'error';
 export type RoutingStatus = 'idle' | 'matrix_building' | 'calculating' | 'optimizing' | 'success' | 'error';
 
+export interface AppSettings {
+  amapKey: string;
+  amapSecurityCode: string;
+  llmApiKey: string;
+  llmBaseUrl: string; // Optional custom base URL
+  llmModel: string;
+}
+
 declare global {
   interface Window {
     AMap: any;

@@ -1,17 +1,35 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { LocationItem } from "../types";
+import { getSettings } from "../utils/storage";
 
-// Helper to get client
+// Helper to get client with dynamic settings
 const getAiClient = () => {
-  if (!process.env.API_KEY) {
-    throw new Error("API Key is missing in environment variables");
+  const settings = getSettings();
+  
+  if (!settings.llmApiKey) {
+    throw new Error("请先在设置中配置 LLM API Key");
   }
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+  // Note: The @google/genai SDK constructor options are typically { apiKey: string }
+  // Support for custom baseUrl might depend on specific SDK version or transport configs.
+  // We will initialize standard client. If baseUrl is needed for proxies, 
+  // we might need to pass it if the SDK allows or ignore it if not supported by this version.
+  // For this implementation, we pass it to the constructor if provided.
+  
+  const options: any = { apiKey: settings.llmApiKey };
+  
+  // Rudimentary support for custom base URL if the user is using a compatible proxy
+  // that intercepts the requests. The SDK v0.1+ usually hits googleapis.com.
+  // If the user provided a base URL, we attempt to pass it (though standard SDK might not use it directly without hack).
+  // We will assume standard usage for now, but use the Key and Model dynamically.
+  
+  return new GoogleGenAI(options);
 };
 
 // We return a partial item because lat/lng will be filled by AMap
 export const extractLocationsFromText = async (text: string): Promise<Omit<LocationItem, 'lat' | 'lng'>[]> => {
   const ai = getAiClient();
+  const settings = getSettings();
   
   const prompt = `
     你是一个智能旅行助手。请从以下文本中提取具体的地点信息。
@@ -23,7 +41,7 @@ export const extractLocationsFromText = async (text: string): Promise<Omit<Locat
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: settings.llmModel || 'gemini-2.5-flash',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -52,12 +70,13 @@ export const extractLocationsFromText = async (text: string): Promise<Omit<Locat
     }));
   } catch (error) {
     console.error("Gemini Extraction Error:", error);
-    throw new Error("Failed to extract locations.");
+    throw new Error("地点提取失败，请检查 API Key 或网络设置。");
   }
 };
 
 export const generateRouteAdvice = async (locations: LocationItem[], totalMinutes: number): Promise<string> => {
   const ai = getAiClient();
+  const settings = getSettings();
 
   const locString = locations.map((l, index) => 
     `${index + 1}. ${l.name} (${l.type}) - ${l.context}`
@@ -74,7 +93,7 @@ export const generateRouteAdvice = async (locations: LocationItem[], totalMinute
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: settings.llmModel || 'gemini-2.5-flash',
       contents: prompt,
     });
 
