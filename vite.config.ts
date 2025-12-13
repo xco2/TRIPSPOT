@@ -8,6 +8,12 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        // 添加开发者工具配置以避免冲突
+        dev: {
+          hmr: {
+            overlay: false
+          }
+        }
       },
       plugins: [react()],
       define: {
@@ -17,6 +23,16 @@ export default defineConfig(({ mode }) => {
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
+        }
+      },
+      build: {
+        // 生产构建优化
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              vendor: ['react', 'react-dom'],
+            }
+          }
         }
       }
     };

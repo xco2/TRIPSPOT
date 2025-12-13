@@ -9,7 +9,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   amapSecurityCode: AMAP_SECURITY_CODE,
   llmApiKey: '', // User must provide
   llmBaseUrl: '', 
-  llmModel: 'gemini-2.5-flash',
+  llmModel: 'gpt-3.5-turbo',
 };
 
 export const getSettings = (): AppSettings => {
