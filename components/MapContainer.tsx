@@ -5,11 +5,22 @@ import { LocationItem } from '../types';
 interface MapContainerProps {
   locations: LocationItem[];
   selectedIds: Set<string>;
+  clickedLocationId: string | null;
+  showLocationLabels: boolean;
+  onMarkerClick: (id: string) => void;
   routeSequence: string[] | null;
   mapLoaded: boolean;
 }
 
-const MapContainer: React.FC<MapContainerProps> = ({ locations, selectedIds, routeSequence, mapLoaded }) => {
+const MapContainer: React.FC<MapContainerProps> = ({
+  locations,
+  selectedIds,
+  clickedLocationId,
+  showLocationLabels,
+  onMarkerClick,
+  routeSequence,
+  mapLoaded
+}) => {
   const mapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const polylineRef = useRef<any>(null);
@@ -42,21 +53,34 @@ const MapContainer: React.FC<MapContainerProps> = ({ locations, selectedIds, rou
     // Add Markers
     locations.forEach((loc) => {
       const isSelected = selectedIds.has(loc.id);
+      const isClicked = clickedLocationId === loc.id;
       const sequenceIndex = routeSequence ? routeSequence.indexOf(loc.id) : -1;
       const label = sequenceIndex >= 0 ? `${sequenceIndex + 1}` : '';
 
       const content = `
-        <div class="custom-marker ${isSelected ? 'selected' : 'inactive'}">
-          ${label}
+        <div class="marker-container">
+          ${showLocationLabels ? `
+            <div class="location-label ${isClicked ? 'clicked' : ''}">
+              ${loc.name}
+            </div>
+          ` : ''}
+          <div class="custom-marker ${isSelected ? 'selected' : 'inactive'}">
+            ${label}
+          </div>
         </div>
       `;
 
       const marker = new window.AMap.Marker({
         position: [loc.lng, loc.lat],
         content: content,
-        offset: new window.AMap.Pixel(-12, -12),
+        offset: new window.AMap.Pixel(-12, showLocationLabels ? -35 : -12),
         anchor: 'center',
         title: loc.name
+      });
+
+      // Add click event listener
+      marker.on('click', () => {
+        onMarkerClick(loc.id);
       });
       
       marker.setMap(mapRef.current);
@@ -92,7 +116,7 @@ const MapContainer: React.FC<MapContainerProps> = ({ locations, selectedIds, rou
       mapRef.current.add(polylineRef.current);
     }
 
-  }, [locations, selectedIds, routeSequence, mapLoaded]);
+  }, [locations, selectedIds, clickedLocationId, showLocationLabels, routeSequence, mapLoaded]);
 
   return (
     <div className="relative w-full h-full border border-black shadow-hard overflow-hidden bg-white">

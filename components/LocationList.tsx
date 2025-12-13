@@ -4,15 +4,17 @@ import { LocationItem } from '../types';
 interface LocationListProps {
   locations: LocationItem[];
   selectedIds: Set<string>;
+  clickedLocationId: string | null;
   onToggleSelect: (id: string) => void;
   routeSequence?: string[];
 }
 
-const LocationList: React.FC<LocationListProps> = ({ 
-  locations, 
-  selectedIds, 
+const LocationList: React.FC<LocationListProps> = ({
+  locations,
+  selectedIds,
+  clickedLocationId,
   onToggleSelect,
-  routeSequence 
+  routeSequence
 }) => {
   if (locations.length === 0) return null;
 
@@ -65,6 +67,10 @@ const LocationList: React.FC<LocationListProps> = ({
                   : 'border-gray-200 bg-gray-50 opacity-80 hover:opacity-100'}
               `}
             >
+              {/* 点击指示器 */}
+              {clickedLocationId === loc.id && (
+                <div className="absolute top-2 right-2 w-3 h-3 bg-black rounded-full"></div>
+              )}
               <div className="flex items-start gap-3">
                 <div className={`
                   w-6 h-6 flex-shrink-0 flex items-center justify-center border text-xs font-bold

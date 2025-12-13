@@ -47,6 +47,8 @@ function App() {
   
   const [locations, setLocations] = useState<LocationItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [clickedLocationId, setClickedLocationId] = useState<string | null>(null);
+  const [showLocationLabels, setShowLocationLabels] = useState(true);
   const [route, setRoute] = useState<RouteResult | null>(null);
   const [parsingStatus, setParsingStatus] = useState<ParsingStatus>('idle');
   const [routingStatus, setRoutingStatus] = useState<RoutingStatus>('idle');
@@ -195,6 +197,10 @@ function App() {
     if (route) setRoute(null);
   };
 
+  const handleMarkerClick = (id: string) => {
+    setClickedLocationId(id);
+  };
+
   const handleRoutePlanning = async () => {
     console.log('🛣️ [DEBUG] 点击路线规划按钮');
     console.log('🗺️ [DEBUG] 地图加载状态:', mapLoaded);
@@ -282,6 +288,38 @@ function App() {
         </div>
         <div className="flex items-center gap-4">
            <div className="text-xs text-gray-400 font-mono hidden sm:block">v1.5 家庭版</div>
+           <div className="flex items-center gap-2">
+             <button
+              onClick={() => setShowLocationLabels(!showLocationLabels)}
+              className="group flex items-center gap-2 focus:outline-none cursor-pointer"
+            >
+              <span className={`text-sm font-bold select-none transition-colors duration-300 ${showLocationLabels ? 'text-black' : 'text-gray-400'}`}>
+                地点标签
+              </span>
+              
+              {/* 开关容器 */}
+              <div 
+                className={`
+                  relative w-12 h-6 border-2 border-black transition-colors duration-300
+                  ${showLocationLabels ? 'bg-black' : 'bg-white'}
+                `}
+                // 这里保留一点硬阴影，增加立体感，但不做位移动画以免干扰开关的流畅度
+                style={{ boxShadow: '2px 2px 0px 0px rgba(0,0,0,1)' }} 
+              >
+                {/* 滑块 (Knob) */}
+                <div 
+                  className={`
+                    absolute top-0.5 left-0.5 w-4 h-4 border-2
+                    transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]
+                    ${showLocationLabels 
+                      ? 'translate-x-6 bg-white border-white' // 激活：向右平移 + 变白
+                      : 'translate-x-0 bg-black border-black' // 未激活：原点 + 变黑
+                    }
+                  `}
+                />
+              </div>
+            </button>
+           </div>
            <Button variant="ghost" onClick={() => setShowSettings(true)} className="px-2">
              ⚙️ 设置
            </Button>
@@ -303,9 +341,10 @@ function App() {
             )}
             
             <div className="mt-4 h-[calc(100vh-350px)]">
-              <LocationList 
-                locations={locations} 
-                selectedIds={selectedIds} 
+              <LocationList
+                locations={locations}
+                selectedIds={selectedIds}
+                clickedLocationId={clickedLocationId}
                 onToggleSelect={toggleSelection}
                 routeSequence={route?.sequence}
               />
@@ -362,9 +401,12 @@ function App() {
                )}
              </div>
           ) : (
-            <MapContainer 
-              locations={locations} 
+            <MapContainer
+              locations={locations}
               selectedIds={selectedIds}
+              clickedLocationId={clickedLocationId}
+              showLocationLabels={showLocationLabels}
+              onMarkerClick={handleMarkerClick}
               routeSequence={route?.sequence || null}
               mapLoaded={mapLoaded}
             />
