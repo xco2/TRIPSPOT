@@ -1,20 +1,48 @@
+# 🗺️ TripSpot (旅点)
+
 <div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+  <h3>你的智能家庭旅行规划助手</h3>
+  <p>基于 AI 的聊天记录解析、智能路径规划与离线行程导出工具</p>
 </div>
 
-# Run and deploy your AI Studio app
+---
 
-This contains everything you need to run your app locally.
+## 📖 项目简介
 
-View your app in AI Studio: https://ai.studio/apps/drive/1C3Jrhjd0AGn6IuW1NHR_cqpbhDljvYX1
+**TripSpot** 是一个**本地优先 (Local-First)** 的旅行规划 Web 应用。它专为家庭出游设计，解决了“从攻略到地图”的繁琐过程。
 
-## Run Locally
+你只需要把微信群里的聊天记录、攻略文本粘贴进去，TripSpot 就能自动提取地点，在地图上标记，并帮你计算最顺路的游玩顺序。
 
-**Prerequisites:**  Node.js
+### ✨ 核心功能
 
+* **🤖 AI 智能提取**: 基于 Google Gemini 或 OpenAI 模型，从自然语言文本中自动提取地点名称、类型及备注。
+* **📍 自动地理编码**: 自动将地点名称转换为高德地图上的精准坐标。
+* **⚡️ 智能路线规划**: 内置轻量级 TSP (旅行商问题) 算法，自动计算最优游玩顺序，不走回头路。
+* **🔐 数据隐私安全**: 所有数据存储在浏览器本地 (IndexedDB)，无需注册账号，你的行程只有你知道。
+* **📄 离线行程导出**: 支持将规划好的路线导出为单一 HTML 文件，旅途中无网也能查看，支持一键唤起地图导航。
+* **🎨 新粗野主义设计**: 高对比度、硬朗的 UI 风格，清晰直观。
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+---
+
+## 🛠️ 技术栈
+
+* **前端框架**: React 19 + Vite + TypeScript
+* **UI 样式**: Tailwind CSS (Neo-brutalism 风格)
+* **地图服务**: 高德地图 JS API (AMap)
+* **数据存储**: Dexie.js (IndexedDB wrapper)
+* **AI 能力**: Google Gemini API / OpenAI API
+
+---
+
+## 🚀 快速开始
+
+### 1. 环境准备
+确保你的环境中有 [Node.js](https://nodejs.org/) (推荐 v18+)。
+
+### 2. 安装依赖
+由于项目中使用了特定的 React 版本，建议直接安装：
+
+```bash
+npm install
+# 或者
+yarn install

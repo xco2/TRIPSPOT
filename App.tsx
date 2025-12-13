@@ -449,7 +449,7 @@ function App() {
           <h1 className="text-xl font-bold tracking-tighter">旅点 TRIPSPOT</h1>
         </div>
         <div className="flex items-center gap-4">
-           <div className="text-xs text-gray-400 font-mono hidden sm:block">v1.5 家庭版</div>
+           <div className="text-xs text-gray-400 font-mono hidden sm:block">v0.5</div>
            <div className="flex items-center gap-2">
              <button
               onClick={() => setShowLocationLabels(!showLocationLabels)}
