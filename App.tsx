@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { LocationItem, ParsingStatus, RouteResult, RoutingStatus } from './types';
+import { useLiveQuery } from 'dexie-react-hooks';
 import InputSection from './components/InputSection';
 import LocationList from './components/LocationList';
 import MapContainer from './components/MapContainer';
 import Button from './components/ui/Button';
 import Login from './components/Login';
 import Settings from './components/Settings';
+import LocationFormModal from './components/LocationFormModal';
 import { extractLocationsFromText } from './services/openaiService';
 import { geocodeLocations } from './services/mapService';
 import { solveTSP } from './services/tspService';
 import { generateOfflineHTML } from './utils/htmlGenerator';
-import { getSettings, isUserLoggedIn } from './utils/storage';
+import { db, saveSettingsToDB, getSettingsFromDB } from './src/db';
+import { isUserLoggedIn } from './utils/storage';
 
 // Global error handler for devtools and runtime errors
 const setupGlobalErrorHandling = () => {
@@ -41,18 +44,55 @@ const setupGlobalErrorHandling = () => {
 
 type ViewState = 'login' | 'main';
 
+const AsyncMapLoad: React.FC<{ onShowSettings: () => void }> = ({ onShowSettings }) => {
+  const [settings, setSettings] = useState<any>(null);
+
+  useEffect(() => {
+    getSettingsFromDB().then(setSettings);
+  }, []);
+
+  if (!settings) {
+    return (
+      <>
+        <div className="animate-spin w-8 h-8 border-4 border-black border-t-transparent rounded-full mb-4"></div>
+        <p className="font-bold">正在连接地图服务...</p>
+      </>
+    );
+  }
+
+  return !settings.amapKey ? (
+    <>
+      <p className="font-bold text-lg mb-2">欢迎使用旅点 TripSpot</p>
+      <p className="text-gray-500 mb-4">请先点击右上角「设置」配置高德地图 API Key</p>
+      <Button onClick={onShowSettings}>去配置</Button>
+    </>
+  ) : (
+    <>
+      <div className="animate-spin w-8 h-8 border-4 border-black border-t-transparent rounded-full mb-4"></div>
+      <p className="font-bold">正在连接地图服务...</p>
+    </>
+  );
+};
+
 function App() {
   const [view, setView] = useState<ViewState>('login');
   const [showSettings, setShowSettings] = useState(false);
   
-  const [locations, setLocations] = useState<LocationItem[]>([]);
+  // 使用 useLiveQuery 自动同步 DB 数据
+  const locations = useLiveQuery(() => db.locations.toArray()) || [];
+  const routeData = useLiveQuery(() => db.route.get(1));
+  const route = routeData?.data || null;
+  
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [clickedLocationId, setClickedLocationId] = useState<string | null>(null);
   const [showLocationLabels, setShowLocationLabels] = useState(true);
-  const [route, setRoute] = useState<RouteResult | null>(null);
   const [parsingStatus, setParsingStatus] = useState<ParsingStatus>('idle');
   const [routingStatus, setRoutingStatus] = useState<RoutingStatus>('idle');
   const [mapLoaded, setMapLoaded] = useState(false);
+
+  // 控制 Modal 的状态
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingLocation, setEditingLocation] = useState<LocationItem | undefined>(undefined);
 
   // Initialize Auth State and global error handling
   useEffect(() => {
@@ -64,77 +104,173 @@ function App() {
     }
   }, []);
 
-  // Map Loading Logic - Depends on Settings
+  // Map Loading Logic - 需要异步获取 setting
   useEffect(() => {
     if (view !== 'main') return;
 
-    const settings = getSettings();
-    if (!settings.amapKey) {
-      // If no key is configured, we can't load the map. 
-      // User needs to go to settings.
-      return;
-    }
+    const initMap = async () => {
+      const settings = await getSettingsFromDB();
+      if (!settings.amapKey) {
+        // If no key is configured, we can't load the map. 
+        // User needs to go to settings.
+        return;
+      }
 
-    // Check if config exists, if not set it
-    if (!window._AMapSecurityConfig) {
-       console.log('🔧 [DEBUG] 检查高德地图安全配置:', {
-         hasSecurityCode: !!settings.amapSecurityCode,
-         securityCodeLength: settings.amapSecurityCode?.length || 0,
-         hasAmapKey: !!settings.amapKey
-       });
-       
-       // 只有在有安全密钥的情况下才配置，否则不设置
-       if (settings.amapSecurityCode && settings.amapSecurityCode.trim()) {
-         console.log('🔧 [DEBUG] 设置高德地图安全配置');
-         window._AMapSecurityConfig = {
-           securityJsCode: settings.amapSecurityCode,
-         };
-       } else {
-         console.log('🔧 [DEBUG] 无安全密钥，跳过安全配置');
-       }
-    }
-    
-    // 1. If AMap is already available
-    if (window.AMap) {
-      setMapLoaded(true);
-      return;
-    }
-
-    // 2. Define Callback for Async Loading
-    window.onAMapLoaded = () => {
-      setTimeout(() => {
+      // Check if config exists, if not set it
+      if (!window._AMapSecurityConfig) {
+         console.log('🔧 [DEBUG] 检查高德地图安全配置:', {
+           hasSecurityCode: !!settings.amapSecurityCode,
+           securityCodeLength: settings.amapSecurityCode?.length || 0,
+           hasAmapKey: !!settings.amapKey
+         });
+         
+         // 只有在有安全密钥的情况下才配置，否则不设置
+         if (settings.amapSecurityCode && settings.amapSecurityCode.trim()) {
+           console.log('🔧 [DEBUG] 设置高德地图安全配置');
+           window._AMapSecurityConfig = {
+             securityJsCode: settings.amapSecurityCode,
+           };
+         } else {
+           console.log('🔧 [DEBUG] 无安全密钥，跳过安全配置');
+         }
+      }
+      
+      // 1. If AMap is already available
+      if (window.AMap) {
         setMapLoaded(true);
-      }, 100);
-    };
+        return;
+      }
 
-    // 3. Prevent duplicate script injection
-    const scriptId = 'amap-js-api';
-    const existingScript = document.getElementById(scriptId);
-    
-    if (existingScript) {
-      const interval = setInterval(() => {
-        if (window.AMap) {
+      // 2. Define Callback for Async Loading
+      window.onAMapLoaded = () => {
+        setTimeout(() => {
           setMapLoaded(true);
-          clearInterval(interval);
-        }
-      }, 500);
-      return () => clearInterval(interval);
-    }
+        }, 100);
+      };
 
-    // 4. Inject Script with Callback using Key from Settings
-    const script = document.createElement('script');
-    script.id = scriptId;
-    script.src = `https://webapi.amap.com/maps?v=2.0&key=${settings.amapKey}&callback=onAMapLoaded`;
-    script.async = true;
-    script.onerror = () => {
-      alert("高德地图加载失败，请在设置中检查 API Key");
-    };
-    document.body.appendChild(script);
+      // 3. Prevent duplicate script injection
+      const scriptId = 'amap-js-api';
+      const existingScript = document.getElementById(scriptId);
+      
+      if (existingScript) {
+        const interval = setInterval(() => {
+          if (window.AMap) {
+            setMapLoaded(true);
+            clearInterval(interval);
+          }
+        }, 500);
+        return () => clearInterval(interval);
+      }
 
-    return () => {
-      window.onAMapLoaded = undefined;
+      // 4. Inject Script with Callback using Key from Settings
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.src = `https://webapi.amap.com/maps?v=2.0&key=${settings.amapKey}&callback=onAMapLoaded`;
+      script.async = true;
+      script.onerror = () => {
+        alert("高德地图加载失败，请在设置中检查 API Key");
+      };
+      document.body.appendChild(script);
+
+      return () => {
+        window.onAMapLoaded = undefined;
+      };
     };
+    initMap();
   }, [view]); // Reload logic if view changes to main, relies on settings being saved triggers reload in Settings component
+
+  // 处理手动添加/保存
+  const handleSaveLocation = async (data: Omit<LocationItem, 'id' | 'lat' | 'lng'>) => {
+    if (editingLocation) {
+      // 编辑模式
+      await db.locations.update(editingLocation.id, {
+        ...data,
+        // 如果改了城市/名字，可能需要重新获取坐标，这里简化处理，假设用户手动改的不重置坐标
+        // 或者是为了严谨，这里可以置空 lat/lng 让用户重新点击"提取" (逻辑会复杂)
+        // 简单方案：保留原坐标。
+      });
+    } else {
+      // 新增模式 - 自动进行地理编码
+      const newLocationId = crypto.randomUUID();
+      await db.locations.add({
+        id: newLocationId,
+        ...data,
+        lat: 0,
+        lng: 0
+      });
+      
+      // 自动触发地理编码
+      try {
+        console.log('🗺️ [DEBUG] 开始自动地理编码手动添加的地点:', data.name);
+        const geocodedLocations = await geocodeLocations([{ ...data, id: newLocationId }]);
+        if (geocodedLocations.length > 0) {
+          const geocoded = geocodedLocations[0];
+          await db.locations.update(newLocationId, {
+            lat: geocoded.lat,
+            lng: geocoded.lng
+          });
+          console.log('✅ [DEBUG] 自动地理编码成功:', geocoded);
+        } else {
+          console.warn('⚠️ [DEBUG] 自动地理编码失败，地点可能没有坐标');
+        }
+      } catch (geocodeError) {
+        console.error('❌ [DEBUG] 自动地理编码失败:', geocodeError);
+        // 不阻断用户添加，只记录错误
+      }
+    }
+    setEditingLocation(undefined);
+  };
+
+  // 处理删除
+  const handleDeleteLocation = async (id: string) => {
+    if (confirm('确定删除这个地点吗？')) {
+      await db.locations.delete(id);
+      // 如果删除了地点，建议清除路线
+      await db.route.clear();
+    }
+  };
+
+  // 导出功能 (JSON)
+  const handleExportJSON = async () => {
+    const data = {
+      version: 1,
+      timestamp: new Date().toISOString(),
+      locations: await db.locations.toArray(),
+      route: (await db.route.get(1))?.data || null
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tripspot_backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+  };
+
+  // 导入功能
+  const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const json = JSON.parse(event.target?.result as string);
+        if (json.locations) {
+          await db.transaction('rw', db.locations, db.route, async () => {
+            await db.locations.clear();
+            await db.locations.bulkAdd(json.locations);
+            await db.route.clear();
+            if (json.route) {
+               await db.route.put({ id: 1, data: json.route });
+            }
+          });
+          alert('行程加载成功！');
+        }
+      } catch (err) {
+        alert('文件格式错误');
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const handleParse = async (text: string) => {
     console.log('🚀 [DEBUG] 点击提取按钮 - 开始处理');
@@ -142,7 +278,7 @@ function App() {
     console.log('🗺️ [DEBUG] 地图加载状态:', mapLoaded);
     
     if (!mapLoaded) {
-      const settings = getSettings();
+      const settings = await getSettingsFromDB();
       if (!settings.amapKey) {
          console.warn('⚠️ [DEBUG] 高德地图API Key未配置');
          alert("请先点击右上角设置，配置高德地图 API Key");
@@ -169,15 +305,38 @@ function App() {
       const validLocations = await geocodeLocations(rawLocations);
       console.log('📍 [DEBUG] 地理编码结果:', validLocations);
       
-      console.log('💾 [DEBUG] 步骤3: 更新UI状态');
-      setLocations(validLocations);
-      setSelectedIds(new Set(validLocations.map(l => l.id)));
-      setRoute(null);
+      console.log('💾 [DEBUG] 步骤3: 保存到数据库');
+      
+      // 获取现有地点
+      const existingLocations = await db.locations.toArray();
+      console.log('📋 [DEBUG] 现有地点数量:', existingLocations.length);
+      
+      // 检查重复，地点名称完全一致的才跳过
+      const existingNames = new Set(existingLocations.map(l => l.name));
+      const newLocations = validLocations.filter(loc => !existingNames.has(loc.name));
+      const skippedLocations = validLocations.filter(loc => existingNames.has(loc.name));
+      
+      console.log('🆕 [DEBUG] 新增地点数量:', newLocations.length);
+      console.log('⏭️ [DEBUG] 跳过重复地点:', skippedLocations.length, skippedLocations.map(l => l.name));
+      
+      if (newLocations.length > 0) {
+        // 合并新地点
+        await db.locations.bulkAdd(newLocations);
+        // 更新选中状态
+        const allSelectedIds = new Set([...selectedIds, ...newLocations.map(l => l.id)]);
+        setSelectedIds(allSelectedIds);
+      }
+      
+      // 清除现有路线（因为地点变更了）
+      await db.route.clear();
       setParsingStatus('success');
       
       console.log('✅ [DEBUG] 地点提取完成！', {
-        总数: validLocations.length,
-        已选中: validLocations.length
+        原有: existingLocations.length,
+        新增: newLocations.length,
+        跳过: skippedLocations.length,
+        总数: existingLocations.length + newLocations.length,
+        已选中: selectedIds.size + newLocations.length
       });
     } catch (error: any) {
       console.error('❌ [DEBUG] 地点提取失败:', error);
@@ -194,7 +353,9 @@ function App() {
       next.add(id);
     }
     setSelectedIds(next);
-    if (route) setRoute(null);
+    if (route) {
+      db.route.clear(); // 清除路线
+    }
   };
 
   const handleMarkerClick = (id: string) => {
@@ -234,7 +395,8 @@ function App() {
       console.log(`✅ [DEBUG] TSP规划完成，耗时 ${endTime - startTime}ms`);
       console.log('📊 [DEBUG] TSP结果:', result);
       
-      setRoute(result);
+      // 保存路线到数据库
+      await db.route.put({ id: 1, data: result });
       setRoutingStatus('success');
       
       console.log('🎉 [DEBUG] 路线规划完成！', {
@@ -340,12 +502,29 @@ function App() {
               <div className="text-center text-xs text-gray-500 mb-2">正在通过高德 API 获取精准坐标...</div>
             )}
             
+            {/* 在 LocationList 上方增加按钮 */}
+            <div className="flex gap-2 mb-2">
+               <Button onClick={() => { setEditingLocation(undefined); setIsModalOpen(true); }} className="flex-1">
+                 + 手动添加
+               </Button>
+               {/* 隐藏的文件输入框用于导入 */}
+               <input type="file" id="importJson" className="hidden" accept=".json" onChange={handleImportJSON} />
+               <Button variant="secondary" onClick={() => document.getElementById('importJson')?.click()}>
+                  📂 载入
+               </Button>
+               <Button variant="secondary" onClick={handleExportJSON}>
+                  💾 保存
+               </Button>
+            </div>
+            
             <div className="mt-4 h-[calc(100vh-350px)]">
               <LocationList
                 locations={locations}
                 selectedIds={selectedIds}
                 clickedLocationId={clickedLocationId}
                 onToggleSelect={toggleSelection}
+                onDelete={handleDeleteLocation}
+                onEdit={(loc) => { setEditingLocation(loc); setIsModalOpen(true); }}
                 routeSequence={route?.sequence}
               />
             </div>
@@ -387,18 +566,8 @@ function App() {
         <div className="flex-1 bg-gray-100 p-4">
           {!mapLoaded ? (
              <div className="w-full h-full flex flex-col items-center justify-center border border-black bg-white">
-               {!getSettings().amapKey ? (
-                 <>
-                  <p className="font-bold text-lg mb-2">欢迎使用旅点 TripSpot</p>
-                  <p className="text-gray-500 mb-4">请先点击右上角「设置」配置高德地图 API Key</p>
-                  <Button onClick={() => setShowSettings(true)}>去配置</Button>
-                 </>
-               ) : (
-                 <>
-                  <div className="animate-spin w-8 h-8 border-4 border-black border-t-transparent rounded-full mb-4"></div>
-                  <p className="font-bold">正在连接地图服务...</p>
-                 </>
-               )}
+               {/* 需要异步获取设置 */}
+               <AsyncMapLoad onShowSettings={() => setShowSettings(true)} />
              </div>
           ) : (
             <MapContainer
@@ -413,6 +582,13 @@ function App() {
           )}
         </div>
       </div>
+
+      <LocationFormModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSaveLocation}
+        initialData={editingLocation}
+      />
     </div>
   );
 }

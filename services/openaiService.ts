@@ -1,10 +1,10 @@
 import OpenAI from "openai";
 import { LocationItem } from "../types";
-import { getSettings } from "../utils/storage";
+import { getSettingsFromDB } from "../src/db";
 
 // Helper to get client with dynamic settings
-const getOpenAIClient = () => {
-  const settings = getSettings();
+const getOpenAIClient = async () => {
+  const settings = await getSettingsFromDB();
   
   if (!settings.llmApiKey) {
     throw new Error("请先在设置中配置 LLM API Key");
@@ -28,8 +28,8 @@ export const extractLocationsFromText = async (text: string): Promise<Omit<Locat
   console.log('🔍 [DEBUG] 开始LLM地点提取...');
   console.log('📝 [DEBUG] 待解析文本:', text);
   
-  const client = getOpenAIClient();
-  const settings = getSettings();
+  const client = await getOpenAIClient();
+  const settings = await getSettingsFromDB();
   
   const prompt = `
     你是一个智能旅行助手。请从以下文本中提取具体的地点信息。
@@ -157,8 +157,8 @@ export const generateRouteAdvice = async (locations: LocationItem[], totalMinute
   console.log('📍 [DEBUG] 行程地点数量:', locations.length);
   console.log('⏱️ [DEBUG] 总时长:', `${Math.round(totalMinutes)}分钟`);
   
-  const client = getOpenAIClient();
-  const settings = getSettings();
+  const client = await getOpenAIClient();
+  const settings = await getSettingsFromDB();
 
   const locString = locations.map((l, index) =>
     `${index + 1}. ${l.name} (${l.type}) - ${l.context}`

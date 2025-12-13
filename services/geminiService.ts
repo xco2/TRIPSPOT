@@ -1,10 +1,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { LocationItem } from "../types";
-import { getSettings } from "../utils/storage";
+import { getSettingsFromDB } from "../src/db";
 
 // Helper to get client with dynamic settings
-const getAiClient = () => {
-  const settings = getSettings();
+const getAiClient = async () => {
+  const settings = await getSettingsFromDB();
   
   if (!settings.llmApiKey) {
     throw new Error("请先在设置中配置 LLM API Key");
@@ -28,8 +28,8 @@ const getAiClient = () => {
 
 // We return a partial item because lat/lng will be filled by AMap
 export const extractLocationsFromText = async (text: string): Promise<Omit<LocationItem, 'lat' | 'lng'>[]> => {
-  const ai = getAiClient();
-  const settings = getSettings();
+  const ai = await getAiClient();
+  const settings = await getSettingsFromDB();
   
   const prompt = `
     你是一个智能旅行助手。请从以下文本中提取具体的地点信息。
@@ -75,8 +75,8 @@ export const extractLocationsFromText = async (text: string): Promise<Omit<Locat
 };
 
 export const generateRouteAdvice = async (locations: LocationItem[], totalMinutes: number): Promise<string> => {
-  const ai = getAiClient();
-  const settings = getSettings();
+  const ai = await getAiClient();
+  const settings = await getSettingsFromDB();
 
   const locString = locations.map((l, index) => 
     `${index + 1}. ${l.name} (${l.type}) - ${l.context}`

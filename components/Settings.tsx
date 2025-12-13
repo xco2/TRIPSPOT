@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import Button from './ui/Button';
 import { AppSettings } from '../types';
-import { getSettings, saveSettings, logoutUser } from '../utils/storage';
+import { getSettingsFromDB, saveSettingsToDB } from '../src/db';
+import { logoutUser } from '../utils/storage';
 
 interface SettingsProps {
   onClose: () => void;
@@ -18,15 +19,19 @@ const Settings: React.FC<SettingsProps> = ({ onClose, onLogout }) => {
   });
 
   useEffect(() => {
-    setFormData(getSettings());
+    const loadSettings = async () => {
+      const settings = await getSettingsFromDB();
+      setFormData(settings);
+    };
+    loadSettings();
   }, []);
 
   const handleChange = (field: keyof AppSettings, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSave = () => {
-    saveSettings(formData);
+  const handleSave = async () => {
+    await saveSettingsToDB(formData);
     alert('设置已保存，部分更改可能需要刷新页面生效。');
     onClose();
     // We could force a reload here if needed, but for now just close

@@ -6,6 +6,8 @@ interface LocationListProps {
   selectedIds: Set<string>;
   clickedLocationId: string | null;
   onToggleSelect: (id: string) => void;
+  onDelete: (id: string) => void; // 新增
+  onEdit: (location: LocationItem) => void; // 新增
   routeSequence?: string[];
 }
 
@@ -14,6 +16,8 @@ const LocationList: React.FC<LocationListProps> = ({
   selectedIds,
   clickedLocationId,
   onToggleSelect,
+  onDelete,
+  onEdit,
   routeSequence
 }) => {
   if (locations.length === 0) return null;
@@ -60,7 +64,7 @@ const LocationList: React.FC<LocationListProps> = ({
             <div
               key={`${loc.id}-${index}`}
               onClick={() => onToggleSelect(loc.id)}
-              className={`
+className={`
                 group relative border p-3 cursor-pointer transition-all
                 ${isSelected
                   ? 'border-black bg-white shadow-hard-sm'
@@ -71,6 +75,23 @@ const LocationList: React.FC<LocationListProps> = ({
               {clickedLocationId === loc.id && (
                 <div className="absolute top-2 right-2 w-3 h-3 bg-black rounded-full"></div>
               )}
+              
+              {/* 新增操作按钮区 (绝对定位到右上角) */}
+              <div className="absolute top-2 right-8 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onEdit(loc); }}
+                  className="text-xs hover:text-blue-600 px-1 font-bold"
+                >
+                  EDIT
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDelete(loc.id); }}
+                  className="text-xs hover:text-red-600 px-1 font-bold"
+                >
+                  DEL
+                </button>
+              </div>
+              
               <div className="flex items-start gap-3">
                 <div className={`
                   w-6 h-6 flex-shrink-0 flex items-center justify-center border text-xs font-bold

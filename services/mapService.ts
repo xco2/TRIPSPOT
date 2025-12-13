@@ -1,5 +1,5 @@
 import { LocationItem } from "../types";
-import { getSettings } from "../utils/storage";
+import { getSettingsFromDB } from "../src/db";
 
 // Helper to check AMap availability
 const ensureAMap = () => {
@@ -30,7 +30,7 @@ export const geocodeLocations = async (
   console.log('📍 [DEBUG] 待编码地点数量:', rawItems.length);
   console.log('📋 [DEBUG] 待编码地点详情:', rawItems);
   
-  const settings = getSettings();
+  const settings = await getSettingsFromDB();
   if (!settings.amapKey) {
     console.error('❌ [DEBUG] 高德API Key未配置');
     throw new Error("请先在设置中配置高德地图 API Key");
